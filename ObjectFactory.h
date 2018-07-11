@@ -1,44 +1,58 @@
 #ifndef SUPPORT_OBJECT_FACTORY_H
 #define SUPPORT_OBJECT_FACTORY_H
-#include <QMap>
-#include <QString>
 #include <functional>
+#include <map>
+#include <memory>
 
+template<class Product,class ID>
 class ObjectFactory
 {
 public:
-    template<class Target>
-    static Target* create(const QString& name)
+    static std::shared_ptr<Product> create(const ID& id)
     {
-        auto itr = creator.find(name);
-        if (itr != creator.end())
+        auto itr = creator->find(id);
+        if (itr != creator->end())
         {
-            QObject* ptr = itr.value()();
-            if (!ptr)
-                return nullptr;
-            return dynamic_cast<Target*>(ptr);
+			return itr->second();
         }
-        return nullptr;
+		return nullptr;
     }
    
-    static QMap<QString,std::function<QObject*()>> creator;
+	static std::map<ID,std::function<std::shared_ptr<Product>()>>* creator;
 
-    template<class Object>
-    QObject* createObject()
+	static void initialize()
+	{
+		if (!creator)
+			creator = new std::map<ID, std::function<std::shared_ptr<Product>()>>();
+	}
+
+	static void shutdown()
+	{
+		if (creator)
+			delete creator;
+		creator = nullptr;
+	}
+
+	template<class Target>
+    static std::shared_ptr<Product> createObject()
     {
-        return new Object();
+        return std::shared_ptr<Product>(new Target());
     };
 };
-
-template<class Object>
-class ObjectRegister : public ObjectFactory
+     
+template<class Product,class Target,class ID>
+class ObjectRegister : public ObjectFactory<Product,ID>
 {
 public:
-    ObjectRegister(const QString& name)
+    ObjectRegister(const ID& id)
     {
-        auto fn = std::bind(&ObjectFactory::createObject<Object>,this);
-        creator.insert(name,fn);
+		initialize();
+		auto fn = &ObjectFactory::createObject<Target>;
+		(*creator)[id] = fn;
     }
 };
+
+template<class Product,class ID>
+std::map<ID,std::function<std::shared_ptr<Product>()>>* ObjectFactory<Product,ID>::creator = nullptr;
 
 #endif
